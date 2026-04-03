@@ -1,0 +1,104 @@
+:root {
+  /* 现代神秘学 Glassmorphism 设计美学 */
+  --bg-gradient-start: #0f1015;
+  --bg-gradient-end: #171026;
+  
+  --primary-accent: #a578ff; /* 年轻化的赛博紫 */
+  --primary-glow: rgba(165, 120, 255, 0.4);
+  --secondary-accent: #ffd166; /* 秘法星芒金 */
+  
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  
+  --text-primary: #ffffff;
+  --text-secondary: #aba4c4;
+  
+  --font-serif: 'Crimson Pro', 'Noto Serif SC', serif;
+  --font-sans: 'Inter', '-apple-system', 'SF Pro Text', 'Noto Sans SC', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background: radial-gradient(circle at center, var(--bg-gradient-end), var(--bg-gradient-start));
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 提供类原生 App 体验 */
+  user-select: none;
+  overflow: hidden;
+  font-weight: 300;
+}
+
+/* 玻璃拟物态面板 (Glassmorphism) */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: var(--glass-shadow);
+  padding: 40px;
+}
+
+/* 现代化的输入框 */
+.modern-input {
+  width: 100%;
+  padding: 14px 18px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  resize: none;
+}
+
+.modern-input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.modern-input:focus {
+  outline: none;
+  border-color: var(--primary-accent);
+  box-shadow: 0 0 20px var(--primary-glow);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* 年轻化交互按钮 */
+.modern-button {
+  padding: 14px 40px;
+  background: linear-gradient(135deg, var(--primary-accent), #7641ff);
+  color: #fff;
+  border: none;
+  border-radius: 30px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px var(--primary-glow);
+}
+
+.modern-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px var(--primary-glow);
+}
+
+.modern-button:active {
+  transform: translateY(1px);
+}
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
