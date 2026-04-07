@@ -1,6 +1,16 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
+/**
+ * 塔罗卡牌组件
+ * 
+ * 牌背使用 assets/images/tarot/Back_of_card.webp 真实图片
+ * 牌面采用 3D CSS 翻转 (rotateY) 实现正反面切换
+ */
+
+// 使用 Vite 动态路径加载牌背资源
+const backImageUrl = new URL('../assets/images/tarot/Back_of_card.webp', import.meta.url).href;
+
 interface TarotCardProps {
   cardId: string;
   frontImage: string;
@@ -48,53 +58,24 @@ export const TarotCard: React.FC<TarotCardProps> = ({
         marginTop: -125
       }}
     >
-      {/* 牌背层 - 重构为炫酷的宇宙深渊法阵背纹 */}
+      {/* 牌背层 - 使用真实牌背图片 */}
       <div 
         style={{
           position: 'absolute',
           width: '100%',
           height: '100%',
           backfaceVisibility: 'hidden',
-          background: 'linear-gradient(135deg, #110c1c, #09060f)',
-          border: '1px solid rgba(165, 120, 255, 0.4)',
           borderRadius: 12,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundImage: `
-            radial-gradient(circle at center, rgba(165, 120, 255, 0.15) 0%, transparent 60%),
-            conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(165, 120, 255, 0.05) 90deg, transparent 180deg, rgba(165, 120, 255, 0.05) 270deg, transparent 360deg)
-          `,
-          boxShadow: 'inset 0 0 20px rgba(0,0,0,0.8)'
+          overflow: 'hidden',
+          backgroundImage: `url(${backImageUrl})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          border: '1px solid rgba(165, 120, 255, 0.4)',
+          boxShadow: 'inset 0 0 20px rgba(0,0,0,0.3)'
         }}
-      >
-        <div style={{
-          width: '70%',
-          height: '80%',
-          border: '1px solid rgba(165, 120, 255, 0.3)',
-          borderRadius: '8px',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          position: 'relative'
-        }}>
-           <div style={{
-              width: '40px', height: '40px', 
-              border: '2px solid rgba(165,120,255,0.6)', 
-              transform: 'rotate(45deg)',
-              display: 'flex', justifyContent: 'center', alignItems: 'center'
-           }}>
-              <div style={{
-                 width: '20px', height: '20px', 
-                 background: 'rgba(165,120,255,0.8)', 
-                 borderRadius: '50%',
-                 boxShadow: '0 0 10px var(--primary-accent)'
-              }} />
-           </div>
-        </div>
-      </div>
+      />
 
-      {/* 牌面层 (解决纯透明且无法得知究竟抽了哪张面貌的问题) */}
+      {/* 牌面层 */}
       <div 
         style={{
           position: 'absolute',
@@ -104,7 +85,7 @@ export const TarotCard: React.FC<TarotCardProps> = ({
           borderRadius: 12,
           overflow: 'hidden',
           transform: `rotateY(180deg) ${isReversed ? 'rotateZ(180deg)' : ''}`,
-          backgroundColor: '#1f1a24', // 防止缺失图片导致的纯透明丑陋情况
+          backgroundColor: '#1f1a24',
           backgroundImage: frontImage ? `url(${frontImage})` : 'none',
           backgroundSize: 'cover',
           backgroundPosition: 'center',

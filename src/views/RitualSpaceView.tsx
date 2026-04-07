@@ -13,6 +13,7 @@ export const RitualSpaceView: React.FC = () => {
   
   const { orbX, orbY, isPinching, confidenceFallback, cameraError } = useGestureEngine(videoRef);
   const [deck, setDeck] = useState<Card[]>([]);
+  const [dismissedError, setDismissedError] = useState(false);
   
   const deckCenter = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
@@ -40,7 +41,7 @@ export const RitualSpaceView: React.FC = () => {
   }, [setAppState]);
 
   const handleShuffleClick = () => {
-    window.dispatchEvent(new CustomEvent('TAROT_CIRCLE_GESTURE')); // 共享手势的事件流逻辑
+    window.dispatchEvent(new CustomEvent('TAROT_CIRCLE_GESTURE'));
   };
 
   const handleDrawSingleCard = useCallback(() => {
@@ -74,7 +75,7 @@ export const RitualSpaceView: React.FC = () => {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
-      {cameraError !== 'NONE' && (
+      {cameraError !== 'NONE' && !dismissedError && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
           backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', 
@@ -90,13 +91,7 @@ export const RitualSpaceView: React.FC = () => {
             <button className="modern-button" onClick={() => window.location.reload()}>刷新重新获取</button>
             <p style={{ marginTop: 15, fontSize: 12, color: 'var(--text-secondary)' }}>您依然可以点击屏幕中心直接洗牌/抽牌继续旅程。</p>
             <button className="modern-button" style={{ marginTop: 10, background: 'transparent', border: '1px solid #aaa' }} 
-              onClick={() => {
-                // Temporary fix to dismiss prompt, by letting them use TOUCH mode.
-                // In actual logic, maybe they just close this modal.
-                const el = document.getElementById('camera-error-dimiss');
-                if (el) el.click();
-              }}
-              id="camera-error-dimiss"
+              onClick={() => setDismissedError(true)}
             >忽略并继续 (使用鼠标)</button>
           </div>
         </div>

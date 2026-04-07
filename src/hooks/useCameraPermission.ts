@@ -1,55 +1,49 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+
+/**
+ * 摄像头权限预探测 Hook
+ * 
+ * 设计思路：此 Hook 仅负责"权限探测"，不持有长期的 MediaStream。
+ * 实际的视频流由 MediaPipe Camera 工具类接管（HandTracker 内部），
+ * 避免双引擎争夺同一个 <video> 元素的 srcObject 导致黑屏闪烁。
+ * 
+ * 探测流程：getUserMedia → 成功则立即释放流 → 标记权限已授予
+ * HandTracker 启动时会自己再打开一次摄像头。
+ */
+export type CameraErrorType = 'NONE' | 'NOT_ALLOWED' | 'NOT_FOUND' | 'SECURE_CONTEXT';
 
 export function useCameraPermission() {
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [errorType, setErrorType] = useState<'NONE' | 'NOT_ALLOWED' | 'NOT_FOUND' | 'SECURE_CONTEXT'>('NONE');
+  const [permissionGranted, setPermissionGranted] = useState(false);
+  const [errorType, setErrorType] = useState<CameraErrorType>('NONE');
 
   const requestCamera = useCallback(async () => {
-    // 审计1: 检查是否为安全上下文
+    // 安全上下文检测
     if (window.isSecureContext === false) {
       setErrorType('SECURE_CONTEXT');
       return;
     }
 
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user' }, 
-        audio: false 
+      // 仅探测权限：成功后立即释放流，不占用硬件
+      const probeStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false
       });
-      setStream(mediaStream);
+      // 释放探测流，真正的流由 HandTracker 的 Camera 实例管理
+      probeStream.getTracks().forEach(t => t.stop());
+      setPermissionGranted(true);
       setErrorType('NONE');
     } catch (err: any) {
+      setPermissionGranted(false);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setErrorType('NOT_ALLOWED');
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         setErrorType('NOT_FOUND');
       } else {
-        setErrorType('NOT_ALLOWED'); // 兜底
+        setErrorType('NOT_ALLOWED');
       }
     }
   }, []);
 
-  const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach(track => {
-        track.stop();
-      });
-      setStream(null);
-    }
-  }, [stream]);
-
-  // 绑定 unload 时释放，确保关闭窗口不驻留
-  useEffect(() => {
-    const handleUnload = () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-    window.addEventListener('beforeunload', handleUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleUnload);
-    };
-  }, [stream]);
-
-  return { stream, errorType, requestCamera, stopCamera };
+  return { permissionGranted, errorType, requestCamera };
 }

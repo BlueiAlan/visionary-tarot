@@ -6,6 +6,14 @@ import { useMotionValue } from 'framer-motion';
 import { AppState } from '../models/types';
 import { useCameraPermission } from './useCameraPermission';
 
+/**
+ * 手势引擎 Hook
+ * 
+ * 架构设计：
+ * 1. useCameraPermission 仅做权限探测（成功后立即释放流）
+ * 2. 权限通过后，HandTracker 内部的 MediaPipe Camera 自行打开摄像头并驱动 <video>
+ * 3. 这样避免了双引擎争夺 srcObject 导致的黑屏闪烁问题
+ */
 export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
   const orbX = useMotionValue(-100);
   const orbY = useMotionValue(-100);
@@ -20,22 +28,18 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
   const isShufflingRef = useRef(false);
   
   const lastPinchPosRef = useRef<{y: number} | null>(null);
+  const trackerRef = useRef<HandTracker | null>(null);
 
-  const { stream, errorType, requestCamera, stopCamera } = useCameraPermission();
+  // 第一步：权限探测
+  const { permissionGranted, errorType, requestCamera } = useCameraPermission();
 
   useEffect(() => {
     requestCamera();
-    return () => {
-      stopCamera();
-    };
-  }, [requestCamera, stopCamera]);
+  }, [requestCamera]);
 
+  // 第二步：权限通过后，启动 HandTracker（它会自己打开摄像头）
   useEffect(() => {
-    if (!videoRef.current || !stream) return;
-
-    let tracker: HandTracker;
-
-    videoRef.current.srcObject = stream;
+    if (!videoRef.current || !permissionGranted) return;
 
     const onResults = (results: Results) => {
       if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
@@ -104,9 +108,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
          if (!lastPinchPosRef.current) {
             lastPinchPosRef.current = { y: py };
          } else {
-            // 计算两帧之间的 Y 轴差值，派发为滚轮事件
             const dy = py - lastPinchPosRef.current.y;
-            // 控制滚动灵敏度乘数
             window.dispatchEvent(new CustomEvent('TAROT_GESTURE_SCROLL', { detail: { dy: dy * 1.5 } }));
             lastPinchPosRef.current.y = py;
          }
@@ -120,12 +122,15 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
       });
     };
 
-    tracker = new HandTracker(videoRef.current, onResults);
+    const tracker = new HandTracker(videoRef.current, onResults);
+    trackerRef.current = tracker;
     tracker.start();
 
-    return () => tracker.stop();
-  }, [videoRef, stream, confidenceFallback, setInteractionMode, orbX, orbY]);
+    return () => {
+      tracker.stop();
+      trackerRef.current = null;
+    };
+  }, [videoRef, permissionGranted, confidenceFallback, setInteractionMode, orbX, orbY]);
 
   return { orbX, orbY, isPinching, confidenceFallback, cameraError: errorType };
 }
-
