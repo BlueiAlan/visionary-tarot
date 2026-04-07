@@ -2,4 +2,5 @@ node_modules
 .agent/**
 AGENTS.md
 GEMINI.md
-docs/**
+/docs/**
+/src/assets/**

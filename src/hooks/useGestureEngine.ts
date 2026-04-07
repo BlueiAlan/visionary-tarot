@@ -4,23 +4,7 @@ import { HandTracker } from '../cv/HandTracker';
 import { useAppStore } from '../store/useAppStore';
 import { useMotionValue } from 'framer-motion';
 import { AppState } from '../models/types';
-
-/** 单例摄像头共享：避免每次进入仪式都请求权限导致闪烁 */
-let globalStream: MediaStream | null = null;
-export async function getGlobalStream() {
-  if (!globalStream) {
-    globalStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-  }
-  return globalStream;
-}
-
-// 离开关闭窗口、或组件严重卸载时，强制销毁硬件流，清除指示灯缓存
-window.addEventListener('beforeunload', () => {
-    if (globalStream) {
-        globalStream.getTracks().forEach(track => track.stop());
-        globalStream = null;
-    }
-});
+import { useCameraPermission } from './useCameraPermission';
 
 export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
   const orbX = useMotionValue(-100);
@@ -35,25 +19,23 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
   const pathRef = useRef<{x: number, y: number, time: number}[]>([]);
   const isShufflingRef = useRef(false);
   
-  // 拖动滚屏参数缓存
   const lastPinchPosRef = useRef<{y: number} | null>(null);
 
+  const { stream, errorType, requestCamera, stopCamera } = useCameraPermission();
+
   useEffect(() => {
-    if (!videoRef.current) return;
+    requestCamera();
+    return () => {
+      stopCamera();
+    };
+  }, [requestCamera, stopCamera]);
+
+  useEffect(() => {
+    if (!videoRef.current || !stream) return;
 
     let tracker: HandTracker;
 
-    const initCamera = async () => {
-      try {
-        const stream = await getGlobalStream();
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.warn('相机权限获取失败', err);
-      }
-    };
-    initCamera();
+    videoRef.current.srcObject = stream;
 
     const onResults = (results: Results) => {
       if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
@@ -142,7 +124,8 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
     tracker.start();
 
     return () => tracker.stop();
-  }, [videoRef, confidenceFallback, setInteractionMode, orbX, orbY]);
+  }, [videoRef, stream, confidenceFallback, setInteractionMode, orbX, orbY]);
 
-  return { orbX, orbY, isPinching, confidenceFallback };
+  return { orbX, orbY, isPinching, confidenceFallback, cameraError: errorType };
 }
+

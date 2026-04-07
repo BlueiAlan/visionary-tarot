@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { interpretReading } from '../services/interpreter';
 import { AppState } from '../models/types';
 import html2canvas from 'html2canvas';
+import { generateDeck } from '../utils/deckGenerator';
 
 export const RevelationView: React.FC = () => {
    const { session, apiKey, interpretationText, setInterpretationText, setAppState, resetSession } = useAppStore();
@@ -13,6 +14,8 @@ export const RevelationView: React.FC = () => {
    
    // 标记是否由用户手动介入了滚动，若手动滚动则不再强制滚到最底端 (解决内容太长无法回看的Bug)
    const userHasScrolled = useRef(false);
+
+   const deck = useMemo(() => generateDeck(), []);
 
    useEffect(() => {
      let isMounted = true;
@@ -106,6 +109,35 @@ export const RevelationView: React.FC = () => {
                (💡 可通过手指捏合光球上下拖动，或使用鼠标滚轮来阅读解析)
             </p>
 
+            {/* 真实塔罗牌面展示 */}
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '40px', justifyContent: 'center' }}>
+               {session.drawnCards.map((drawn, i) => {
+                  const cardData = deck.find(c => c.id === drawn.cardId);
+                  if (!cardData) return null;
+                  return (
+                     <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ 
+                           width: 140, height: 230, 
+                           backgroundImage: `url(${cardData.imageUrl})`,
+                           backgroundSize: 'cover', backgroundPosition: 'center',
+                           transform: drawn.isReversed ? 'rotate(180deg)' : 'none',
+                           borderRadius: 10,
+                           border: '2px solid rgba(165,120,255,0.3)',
+                           boxShadow: '0 5px 15px rgba(0,0,0,0.5)'
+                        }} />
+                        <div style={{ marginTop: 15, textAlign: 'center' }}>
+                           <div style={{ fontWeight: 'bold', color: '#f0ecfc', fontSize: 16 }}>
+                              {cardData.chineseName} {drawn.isReversed ? '(逆位)' : ''}
+                           </div>
+                           <div style={{ color: 'var(--primary-accent)', fontSize: 13, marginTop: 4 }}>
+                              {session.selectedSpread?.positions[i].meaning}
+                           </div>
+                        </div>
+                     </div>
+                  );
+               })}
+            </div>
+
             <div style={styles.textContent}>
                {displayedText}
                {isGenerating && <span style={{ animation: 'blink 1s infinite', color: 'var(--primary-accent)' }}>▍</span>}
@@ -134,25 +166,32 @@ export const RevelationView: React.FC = () => {
                </div>
 
                <div style={{ display: 'flex', gap: 30, marginBottom: 40, alignItems: 'stretch' }}>
-                 {session.drawnCards.map((card, i) => (
+                 {session.drawnCards.map((drawn, i) => {
+                    const cardData = deck.find(c => c.id === drawn.cardId);
+                    return (
                     <div key={i} style={{ textAlign: 'center', width: 140 }}>
                        <div style={{ 
-                         width: 140, height: 230, border: '1px solid rgba(165,120,255,0.4)', background: 'linear-gradient(180deg, #1f1f1f, #0f1015)', 
+                         width: 140, height: 230, border: '1px solid rgba(165,120,255,0.4)', 
+                         background: cardData ? `url(${cardData.imageUrl}) no-repeat center/cover` : 'linear-gradient(180deg, #1f1f1f, #0f1015)', 
+                         transform: drawn.isReversed ? 'rotate(180deg)' : 'none',
                          color: '#fff', display: 'flex', flexDirection: 'column',
                          alignItems: 'center', justifyContent: 'center', borderRadius: 12,
                          boxShadow: '0 4px 10px rgba(0,0,0,0.8)'
                        }}>
-                          <span style={{ fontSize: 32, marginBottom: 10 }}>{card.isReversed ? '🌪' : '✨'}</span>
-                          <span style={{ fontWeight: 'bold' }}>{card.cardId}</span>
-                          <span style={{ fontSize: 13, color: '#a578ff', marginTop: 10 }}>
-                             {card.isReversed ? '【 逆位 】' : '【 正位 】'}
-                          </span>
                        </div>
-                       <div style={{ marginTop: 12, fontWeight: 'bold', fontSize: 14, color: '#a578ff' }}>
+                       
+                       {/* 因为图片可能倒转，所以文字要在外侧保持正向 */}
+                       <div style={{ marginTop: 12, fontWeight: 'bold', fontSize: 16, color: '#f0ecfc' }}>
+                         {cardData?.chineseName || drawn.cardId}
+                         <span style={{ fontSize: 12, color: '#a578ff', marginLeft: 5 }}>
+                            {drawn.isReversed ? '逆位' : '正位'}
+                         </span>
+                       </div>
+                       <div style={{ marginTop: 8, fontSize: 13, color: '#a578ff' }}>
                          {session.selectedSpread?.positions[i].meaning}
                        </div>
                     </div>
-                 ))}
+                 )})}
                </div>
 
                <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.8', color: '#f0ecfc', fontSize: 16 }}>

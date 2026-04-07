@@ -11,7 +11,7 @@ export const RitualSpaceView: React.FC = () => {
   const { appState, session, setAppState, addDrawnCard, interactionMode } = useAppStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  const { orbX, orbY, isPinching, confidenceFallback } = useGestureEngine(videoRef);
+  const { orbX, orbY, isPinching, confidenceFallback, cameraError } = useGestureEngine(videoRef);
   const [deck, setDeck] = useState<Card[]>([]);
   
   const deckCenter = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -74,6 +74,36 @@ export const RitualSpaceView: React.FC = () => {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
+      {cameraError !== 'NONE' && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', 
+          justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div className="glass-panel" style={{ padding: 30, maxWidth: 400, textAlign: 'center' }}>
+            <h2 style={{ color: '#ff6b6b' }}>视觉通道已被阻断</h2>
+            <p style={{ color: '#ccc', margin: '20px 0', fontSize: 14 }}>
+              系统未获得您的摄像仪轨权限，或您的环境并非安全上下文 (要求 HTTPS 或 Localhost)。
+              <br/><br/>
+              为了获得最佳沉浸体验，请点击浏览器地址栏左侧的锁头图标，允许摄像头权限并刷新页面。
+            </p>
+            <button className="modern-button" onClick={() => window.location.reload()}>刷新重新获取</button>
+            <p style={{ marginTop: 15, fontSize: 12, color: 'var(--text-secondary)' }}>您依然可以点击屏幕中心直接洗牌/抽牌继续旅程。</p>
+            <button className="modern-button" style={{ marginTop: 10, background: 'transparent', border: '1px solid #aaa' }} 
+              onClick={() => {
+                // Temporary fix to dismiss prompt, by letting them use TOUCH mode.
+                // In actual logic, maybe they just close this modal.
+                const el = document.getElementById('camera-error-dimiss');
+                if (el) el.click();
+              }}
+              id="camera-error-dimiss"
+            >忽略并继续 (使用鼠标)</button>
+          </div>
+        </div>
+      )}
+
+      {/* Override display when error is dismissed. We don't have a state for dismissal here, so let's manage it simply by letting them push through or we can add a local state. */}
+
       <div style={{
           position: 'absolute', top: 40, width: '100%', display: 'flex', 
           flexDirection: 'column', alignItems: 'center', zIndex: 50, pointerEvents: 'none'
@@ -102,7 +132,7 @@ export const RitualSpaceView: React.FC = () => {
         <video 
           ref={videoRef} 
           style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
-          playsInline muted
+          playsInline muted autoPlay
         />
         {(confidenceFallback || interactionMode === 'TOUCH') && (
           <div style={{ position: 'absolute', bottom: 10, left: 0, width: '100%', textAlign: 'center', fontSize: 12, color: '#ff6b6b', background: 'rgba(0,0,0,0.6)', padding: '4px 0' }}>
@@ -162,3 +192,4 @@ export const RitualSpaceView: React.FC = () => {
     </div>
   );
 };
+

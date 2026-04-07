@@ -25,9 +25,12 @@ export type InteractionMode = 'GESTURE' | 'TOUCH';
 export interface Card {
   id: string; // 例如: maj-00
   name: string; // 例如: The Fool
+  chineseName?: string; // 中文名, 例如: 愚者
   suit: 'MAJOR' | 'WANDS' | 'CUPS' | 'SWORDS' | 'PENTACLES';
   imageUrl: string;
+  imageFileName?: string;
   keywords: string[];
+  chineseKeywords?: string[]; // 中文关键词
   element?: 'FIRE' | 'EARTH' | 'AIR' | 'WATER';
 }
 
