@@ -19,6 +19,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
   const orbY = useMotionValue(-100);
   
   const [isPinching, setIsPinching] = useState(false);
+  const [isHandDetected, setIsHandDetected] = useState(false);
   const { setInteractionMode } = useAppStore();
   
   const emptyFramesRef = useRef(0);
@@ -46,6 +47,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
 
     const onResults = (results: Results) => {
       if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+        setIsHandDetected(prev => prev ? false : prev);
         emptyFramesRef.current += 1;
         if (emptyFramesRef.current > 150) { 
           if (!confidenceFallback) {
@@ -57,6 +59,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
         return;
       }
       
+      setIsHandDetected(prev => !prev ? true : prev);
       emptyFramesRef.current = 0; 
       if (confidenceFallback) {
          setConfidenceFallback(false);
@@ -77,7 +80,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
       // --- 圆周意图检测（画圈洗牌） ---
       const now = Date.now();
       pathRef.current.push({ x: px, y: py, time: now });
-      pathRef.current = pathRef.current.filter(p => now - p.time < 1200);
+      pathRef.current = pathRef.current.filter(p => now - p.time < 1800); // 延长采样的视窗兼容慢动作
 
       const appState = useAppStore.getState().appState;
 
@@ -93,7 +96,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
           const det = v1.x * v2.y - v1.y * v2.x;
           totalAngle += Math.atan2(det, dot);
         }
-        if (Math.abs(totalAngle) > Math.PI * 1.4) {
+        if (Math.abs(totalAngle) > Math.PI * 1.2) { // 稍微降低阈值，提升成功率
            isShufflingRef.current = true;
            window.dispatchEvent(new CustomEvent('TAROT_CIRCLE_GESTURE'));
            pathRef.current = [];
@@ -105,7 +108,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
       const distance = Math.sqrt(
         Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2)
       );
-      const currentlyPinching = distance < 0.04;
+      const currentlyPinching = distance < 0.055; // 放宽抓取判定阈值
       
       // --- 凌空拖拽滚屏检测（用于最后的查阅文档页） ---
       if (currentlyPinching && (appState === AppState.REVEALING || appState === AppState.INTERPRETED)) {
@@ -152,5 +155,5 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
     };
   }, [videoRef, permissionGranted, mediaStream, confidenceFallback, setInteractionMode, orbX, orbY]);
 
-  return { orbX, orbY, isPinching, confidenceFallback, cameraError: errorType };
+  return { orbX, orbY, isPinching, isHandDetected, confidenceFallback, cameraError: errorType };
 }

@@ -11,7 +11,7 @@ export const RitualSpaceView: React.FC = () => {
   const { appState, session, setAppState, addDrawnCard, interactionMode } = useAppStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  const { orbX, orbY, isPinching, confidenceFallback, cameraError } = useGestureEngine(videoRef);
+  const { orbX, orbY, isPinching, isHandDetected, confidenceFallback, cameraError } = useGestureEngine(videoRef);
   const [deck, setDeck] = useState<Card[]>([]);
   const [dismissedError, setDismissedError] = useState(false);
   
@@ -182,7 +182,15 @@ export const RitualSpaceView: React.FC = () => {
         orbX={orbX} 
         orbY={orbY} 
         active={isPinching} 
-        isVisible={interactionMode === 'GESTURE'} 
+        isVisible={interactionMode === 'GESTURE'}
+        isHandDetected={isHandDetected}
+        intentText={(function() {
+          if (!isHandDetected) return '寻找手部中...';
+          if (appState === AppState.SHUFFLING) return '食指画圈来洗牌';
+          if (appState === AppState.DRAWING) return checkIsOrbOverDeck() ? '可以捏合抽牌' : '移至牌堆上方';
+          if (appState === AppState.INTERPRETED || appState === AppState.REVEALING) return '捏合拖放滚屏';
+          return '';
+        })()}
       />
     </div>
   );

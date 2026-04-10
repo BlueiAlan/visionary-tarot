@@ -6,9 +6,11 @@ interface LightOrbProps {
   orbY: MotionValue<number>;
   active: boolean;    
   isVisible: boolean; 
+  isHandDetected: boolean;
+  intentText: string;
 }
 
-export const LightOrb: React.FC<LightOrbProps> = ({ orbX, orbY, active, isVisible }) => {
+export const LightOrb: React.FC<LightOrbProps> = ({ orbX, orbY, active, isVisible, isHandDetected, intentText }) => {
   if (!isVisible) return null;
 
   return (
@@ -35,13 +37,34 @@ export const LightOrb: React.FC<LightOrbProps> = ({ orbX, orbY, active, isVisibl
         width: 30,
         height: 30,
         borderRadius: '50%',
-        background: active 
-           ? 'radial-gradient(circle, #FFEAEA 20%, #A52A2A 70%, transparent)' 
-           : 'radial-gradient(circle, #FFFFFF 20%, #a578ff 70%, transparent)',
-        boxShadow: active ? '0 0 30px #A52A2A' : '0 0 20px #a578ff',
+        background: !isHandDetected
+           ? 'radial-gradient(circle, #555 20%, transparent 70%)'
+           : active 
+             ? 'radial-gradient(circle, #FFEAEA 20%, #A52A2A 70%, transparent)' 
+             : 'radial-gradient(circle, #FFFFFF 20%, #a578ff 70%, transparent)',
+        boxShadow: !isHandDetected 
+           ? 'none'
+           : active ? '0 0 30px #A52A2A' : '0 0 20px #a578ff',
         pointerEvents: 'none',
-        zIndex: 9999
+        zIndex: 9999,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        opacity: isHandDetected ? 1 : 0.4
       }}
-    />
+    >
+      <div style={{
+          position: 'absolute',
+          bottom: -25,
+          whiteSpace: 'nowrap',
+          fontSize: '11px',
+          color: isHandDetected ? '#f0ecfc' : '#888',
+          textShadow: '0px 1px 3px rgba(0,0,0,0.8)',
+          letterSpacing: 1,
+          pointerEvents: 'none'
+      }}>
+          {intentText}
+      </div>
+    </motion.div>
   );
 };
