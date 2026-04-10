@@ -19,10 +19,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 const backImageUrl = new URL('../assets/images/tarot/Back_of_card.webp', import.meta.url).href;
 
 export const RevelationView: React.FC = () => {
-   const { session, apiKey, interpretationText, setInterpretationText, setAppState, resetSession } = useAppStore();
+   const { session, apiKey, interpretationText, setInterpretationText, setAppState, resetSession } = useAppStore(state => ({
+     session: state.session,
+     apiKey: state.apiKey,
+     interpretationText: state.interpretationText,
+     setInterpretationText: state.setInterpretationText,
+     setAppState: state.setAppState,
+     resetSession: state.resetSession
+   })); // Optimized selector so unnecessary re-renders are prevented
+
    const [isGenerating, setIsGenerating] = useState(false);
-   const [displayedText, setDisplayedText] = useState('');
    const scrollRef = useRef<HTMLDivElement>(null);
+   const textRef = useRef<HTMLDivElement>(null);
    const exportAreaRef = useRef<HTMLDivElement>(null);
    
    const userHasScrolled = useRef(false);
@@ -57,15 +65,37 @@ export const RevelationView: React.FC = () => {
        setIsGenerating(true);
        try {
          const generator = interpretReading(session, apiKey);
-         let fullText = '';
-         for await (const chunk of generator) {
-           if (!isMounted) break;
-           fullText += chunk;
-           setDisplayedText(fullText);
-           setInterpretationText(fullText);
+          let fullText = '';
+          let pendingText = '';
+          let flushRaf: number | null = null;
+
+          const flush = () => {
+              if (!isMounted || !textRef.current) return;
+              if (pendingText.length > 0) {
+                  textRef.current.appendChild(document.createTextNode(pendingText));
+                  pendingText = '';
+                  
+                  if (!userHasScrolled.current && scrollRef.current) {
+                      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                  }
+              }
+              flushRaf = null;
+          };
+
+          for await (const chunk of generator) {
+            if (!isMounted) break;
+            fullText += chunk;
+            pendingText += chunk;
+            if (!flushRaf) flushRaf = requestAnimationFrame(flush);
+          }
+          if (flushRaf) { cancelAnimationFrame(flushRaf); flush(); }
+         if (isMounted) {
+            setInterpretationText(fullText); // 仅在结束时同步 Zustand，用于最终分享导出
          }
        } catch (err) {
-         if (isMounted) setDisplayedText('连接超自然领域时受到严重干扰，启示被吞噬...');
+         if (isMounted && textRef.current) {
+            textRef.current.textContent = '连接超自然领域时受到严重干扰，启示被吞噬...';
+         }
        } finally {
          if (isMounted) {
            setIsGenerating(false);
@@ -79,23 +109,30 @@ export const RevelationView: React.FC = () => {
      // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [allRevealed]);
 
-   // 自动滚动到底部（AI 输出时），用户手动滚动后不再强制
+   // 凌空滚动支持：使用 requestAnimationFrame 节流优化原生滚动开销
    useEffect(() => {
-      if (isGenerating && !userHasScrolled.current && scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
-   }, [displayedText, isGenerating]);
+     let animationFrameId: number | null = null;
+     let pendingScrollDelta = 0;
 
-   // 凌空滚动支持
-   useEffect(() => {
-     const handleGestureScroll = (e: any) => {
-        if (scrollRef.current) {
-           userHasScrolled.current = true;
-           scrollRef.current.scrollTop -= e.detail.dy;
+     const doScroll = () => {
+        if (scrollRef.current && pendingScrollDelta !== 0) {
+            scrollRef.current.scrollTop -= pendingScrollDelta;
+            pendingScrollDelta = 0;
         }
+        animationFrameId = null;
      };
+
+     const handleGestureScroll = (e: any) => {
+        userHasScrolled.current = true;
+        pendingScrollDelta += e.detail.dy;
+        if (!animationFrameId) animationFrameId = requestAnimationFrame(doScroll);
+     };
+
      window.addEventListener('TAROT_GESTURE_SCROLL', handleGestureScroll);
-     return () => window.removeEventListener('TAROT_GESTURE_SCROLL', handleGestureScroll);
+     return () => {
+        window.removeEventListener('TAROT_GESTURE_SCROLL', handleGestureScroll);
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+     };
    }, []);
 
    const handleExport = useCallback(async () => {
@@ -220,7 +257,7 @@ export const RevelationView: React.FC = () => {
                 transition={{ duration: 0.5 }}
                 style={styles.textContent}
               >
-                 {displayedText}
+                 <span ref={textRef} />
                  {isGenerating && <span style={{ animation: 'blink 1s infinite', color: 'var(--primary-accent)' }}>▍</span>}
               </motion.div>
             )}
@@ -308,8 +345,7 @@ const styles = {
     justifyContent: 'center',
     alignItems: 'center', 
     zIndex: 200, 
-    background: 'rgba(10, 8, 15, 0.92)',
-    backdropFilter: 'blur(30px)' 
+    background: 'rgba(10, 8, 15, 0.98)',
   },
   scrollArea: {
     width: '85%',

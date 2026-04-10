@@ -1,56 +1,85 @@
-import { Hands, Results } from '@mediapipe/hands';
-import { Camera } from '@mediapipe/camera_utils';
+import { Results } from '@mediapipe/hands';
 
 export type GestureEventCallback = (results: Results) => void;
 
 /**
  * 【重构说明】
- * 降低了 `modelComplexity` 以解决卡顿问题。这大幅减少了主线程对每一帧进行推理时的阻塞时长。
+ * - 使用 Web Worker (hand.worker.ts) 将 MediaPipe 推理移出主线程
+ * - 直接使用 requestAnimationFrame 和 createImageBitmap 捕获视频帧，无需 @mediapipe/camera_utils 阻塞主线程
  */
 export class HandTracker {
-  private hands: Hands | null = null;
-  private camera: Camera | null = null;
-  public isRunning = false;
+    private worker: Worker | null = null;
+    public isRunning = false;
+    private animationFrameId: number = 0;
+    private isWorkerBusy = false;
 
-  constructor(private videoElement: HTMLVideoElement, private onResults: GestureEventCallback) {}
+    constructor(private videoElement: HTMLVideoElement, private onResults: GestureEventCallback) { }
 
-  public async initialize() {
-    this.hands = new Hands({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-      }
-    });
+    public async initialize() {
+        // Initialize the Web Worker
+        this.worker = new Worker(new URL('./hand.worker.ts', import.meta.url), { type: 'module' });
+        
+        this.worker.postMessage({ type: 'INIT' });
 
-    this.hands.setOptions({
-      maxNumHands: 1, 
-      // 【极速优化】：原先为1会导致配置差的设备严重卡顿，0大幅提升帧率和追踪丝滑度
-      modelComplexity: 0, 
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
+        this.worker.onmessage = (e: MessageEvent) => {
+            if (e.data.type === 'LANDMARKS') {
+                this.isWorkerBusy = false;
+                // Construct pseudo-Results object to match the expected formatting in useGestureEngine
+                this.onResults({
+                    multiHandLandmarks: e.data.data,
+                    multiHandWorldLandmarks: [],
+                    multiHandedness: [],
+                    image: this.videoElement as any
+                });
+            }
+        };
+    }
 
-    this.hands.onResults(this.onResults);
-
-    this.camera = new Camera(this.videoElement, {
-      onFrame: async () => {
-        if (this.hands && this.isRunning) {
-          // 在 0 级复杂度下帧推理通常不到 10ms，大大缓解卡顿
-          await this.hands.send({ image: this.videoElement });
+    private processFrame = async () => {
+        if (!this.isRunning || !this.worker || this.videoElement.videoWidth === 0) {
+            if (this.isRunning) {
+                this.animationFrameId = requestAnimationFrame(this.processFrame);
+            }
+            return;
         }
-      },
-      width: 640,
-      height: 480
-    });
-  }
 
-  public async start() {
-    if (!this.camera) await this.initialize();
-    this.isRunning = true;
-    await this.camera?.start();
-  }
+        if (this.isWorkerBusy) {
+            this.animationFrameId = requestAnimationFrame(this.processFrame);
+            return;
+        }
 
-  public stop() {
-    this.isRunning = false;
-    this.camera?.stop();
-  }
+        try {
+            this.isWorkerBusy = true;
+            // Transform the video frame into an ImageBitmap to send across the boundary
+            const bitmap = await createImageBitmap(this.videoElement);
+            this.worker.postMessage({ type: 'PROCESS_FRAME', frame: bitmap }, [bitmap]);
+        } catch (e) {
+            console.error("Failed to capture video frame for worker:", e);
+            this.isWorkerBusy = false;
+        }
+
+        // Keep loop running
+        this.animationFrameId = requestAnimationFrame(this.processFrame);
+    };
+
+    public async start() {
+        if (!this.worker) await this.initialize();
+        this.isRunning = true;
+        
+        // Native starting instead of Camera_utils. We assume video is playing if useCameraPermission granted it.
+        // the useCameraPermission sets srcObject.
+        this.processFrame();
+    }
+
+    public stop() {
+        this.isRunning = false;
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+        if (this.worker) {
+            this.worker.terminate();
+            this.worker = null;
+        }
+    }
 }
+

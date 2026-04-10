@@ -136,7 +136,7 @@ export const RitualSpaceView: React.FC = () => {
         )}
       </div>
 
-      <div className="tarot-board" style={{ width: '100%', height: '100%', position: 'relative', perspective: 1200 }}>
+      <div className="tarot-board" style={{ width: '100%', height: '100%', position: 'relative', perspective: 1200, display: (appState === AppState.REVEALING || appState === AppState.INTERPRETED || appState === AppState.SEALED_AND_RESET) ? 'none' : 'block' }}>
         {deck.map((card, idx) => {
           const isDrawnIndex = session.drawnCards.findIndex(dc => dc.cardId === card.id);
           const isDrawn = isDrawnIndex !== -1;

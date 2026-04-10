@@ -10,9 +10,9 @@ import { useCameraPermission } from './useCameraPermission';
  * 手势引擎 Hook
  * 
  * 架构设计：
- * 1. useCameraPermission 仅做权限探测（成功后立即释放流）
- * 2. 权限通过后，HandTracker 内部的 MediaPipe Camera 自行打开摄像头并驱动 <video>
- * 3. 这样避免了双引擎争夺 srcObject 导致的黑屏闪烁问题
+ * 1. 使用 useCameraPermission 获取稳定的 MediaStream
+ * 2. 挂载到 <video> 上后，通过 HandTracker 以 rAF + Web Worker 的方式进行原生帧推理
+ * 3. 避免原来双引擎黑屏问题并极大提升并发性能
  */
 export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
   const orbX = useMotionValue(-100);
@@ -30,16 +30,19 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
   const lastPinchPosRef = useRef<{y: number} | null>(null);
   const trackerRef = useRef<HandTracker | null>(null);
 
-  // 第一步：权限探测
-  const { permissionGranted, errorType, requestCamera } = useCameraPermission();
+  // 第一步：权限探测与获取流
+  const { permissionGranted, errorType, requestCamera, mediaStream } = useCameraPermission();
 
   useEffect(() => {
     requestCamera();
   }, [requestCamera]);
 
-  // 第二步：权限通过后，启动 HandTracker（它会自己打开摄像头）
+  // 处理获取到的流并初始化追踪
   useEffect(() => {
-    if (!videoRef.current || !permissionGranted) return;
+    if (!videoRef.current || !permissionGranted || !mediaStream) return;
+
+    // 将视频流给到 video 元素
+    videoRef.current.srcObject = mediaStream;
 
     const onResults = (results: Results) => {
       if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
@@ -64,6 +67,7 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
       const indexTip = landmarks[8];
       const thumbTip = landmarks[4];
       
+      // 注意：摄像头镜像翻转，所以这里做 1 - x
       const px = (1 - indexTip.x) * window.innerWidth;
       const py = indexTip.y * window.innerHeight;
       
@@ -124,13 +128,29 @@ export function useGestureEngine(videoRef: React.RefObject<HTMLVideoElement>) {
 
     const tracker = new HandTracker(videoRef.current, onResults);
     trackerRef.current = tracker;
-    tracker.start();
+    
+    // 等待 video 加载完 meta 并有了宽度后再启动 worker
+    const startTracker = () => {
+        if (!tracker.isRunning) {
+            tracker.start();
+        }
+    };
+    
+    videoRef.current.addEventListener('loadedmetadata', startTracker);
+
+    if (videoRef.current.readyState >= 1) { // HAVE_METADATA
+        startTracker();
+    }
+
+    // 强制播放放在监听器挂载后
+    videoRef.current.play().catch(e => console.error('Video play error:', e));
 
     return () => {
       tracker.stop();
       trackerRef.current = null;
+      videoRef.current?.removeEventListener('loadedmetadata', startTracker);
     };
-  }, [videoRef, permissionGranted, confidenceFallback, setInteractionMode, orbX, orbY]);
+  }, [videoRef, permissionGranted, mediaStream, confidenceFallback, setInteractionMode, orbX, orbY]);
 
   return { orbX, orbY, isPinching, confidenceFallback, cameraError: errorType };
 }

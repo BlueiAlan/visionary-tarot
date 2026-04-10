@@ -1,20 +1,20 @@
 import { useState, useCallback } from 'react';
 
 /**
- * 摄像头权限预探测 Hook
+ * 摄像头权限与采集 Hook
  * 
- * 设计思路：此 Hook 仅负责"权限探测"，不持有长期的 MediaStream。
- * 实际的视频流由 MediaPipe Camera 工具类接管（HandTracker 内部），
- * 避免双引擎争夺同一个 <video> 元素的 srcObject 导致黑屏闪烁。
- * 
- * 探测流程：getUserMedia → 成功则立即释放流 → 标记权限已授予
- * HandTracker 启动时会自己再打开一次摄像头。
+ * 设计思路：
+ * 此 Hook 负责请求摄像头权限并获取长期的 MediaStream 对象。
+ * 返回的 MediaStream 会被绑定到 <video> 元素上，
+ * 而 HandTracker 会直接使用该 <video> 元素进行 requestAnimationFrame 帧截取，
+ * 从而抛弃了 MediaPipe 官方的高开销 Camera 类。
  */
 export type CameraErrorType = 'NONE' | 'NOT_ALLOWED' | 'NOT_FOUND' | 'SECURE_CONTEXT';
 
 export function useCameraPermission() {
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [errorType, setErrorType] = useState<CameraErrorType>('NONE');
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
 
   const requestCamera = useCallback(async () => {
     // 安全上下文检测
@@ -24,13 +24,12 @@ export function useCameraPermission() {
     }
 
     try {
-      // 仅探测权限：成功后立即释放流，不占用硬件
-      const probeStream = await navigator.mediaDevices.getUserMedia({
+      // 捕获真实摄像头数据流，不再 release，而是保存下来绑定给 <video>
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
         audio: false
       });
-      // 释放探测流，真正的流由 HandTracker 的 Camera 实例管理
-      probeStream.getTracks().forEach(t => t.stop());
+      setMediaStream(stream);
       setPermissionGranted(true);
       setErrorType('NONE');
     } catch (err: any) {
@@ -45,5 +44,5 @@ export function useCameraPermission() {
     }
   }, []);
 
-  return { permissionGranted, errorType, requestCamera };
+  return { permissionGranted, errorType, requestCamera, mediaStream };
 }
